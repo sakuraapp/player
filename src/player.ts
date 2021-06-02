@@ -18,7 +18,7 @@ export interface PlayerState {
     playing: boolean
 }
 
-export default class Player extends EventEmitter implements PlayerState {
+export class Player extends EventEmitter implements PlayerState {
     private player: HTMLMediaElement
     private shouldBePlaying: boolean = false
     private finder = new Finder()
