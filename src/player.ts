@@ -115,6 +115,18 @@ export class Player extends EventEmitter implements PlayerState {
         })
     }
 
+    play(): void {
+        this.playing = true
+    }
+
+    pause(): void {
+        this.playing = false
+    }
+    
+    seek(time: number): void {
+        this.currentTime = time
+    }
+
     public getCaptions(): Array<CaptionTrack> {
         const { player } = this
         const captions = []
