@@ -1,4 +1,4 @@
-import { createProxyFn, callProxyFn } from '~/utils'
+import { createProxyFn, callProxyFn } from '../utils'
 
 export class Netflix {
     static init() {

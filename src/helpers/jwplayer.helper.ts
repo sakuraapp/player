@@ -1,4 +1,4 @@
-import { createInitiator } from '~/utils'
+import { createInitiator } from '../utils'
 
 export class JWPlayer {
     static init() {

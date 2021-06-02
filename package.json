@@ -1,6 +1,6 @@
 {
   "name": "@sakuraapp/player",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Player-agnostic media player abstraction",
   "main": "dist/index.js",
   "scripts": {
