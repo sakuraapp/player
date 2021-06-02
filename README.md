@@ -25,8 +25,8 @@ player.find().then(() => {
     
     player.playing = true // alternative to player.play()
     
-    player.currentTime = 120 // time in seconds
-    player.seek(120)
+    player.seek(120) // time in seconds
+    player.currentTime = 120 // alternative to player.seek()
     
     console.log(player.duration)
 
