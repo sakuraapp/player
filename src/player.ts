@@ -19,15 +19,9 @@ export interface PlayerState {
 }
 
 export class Player extends EventEmitter implements PlayerState {
-    private player: HTMLMediaElement
-    private shouldBePlaying: boolean = false
-    private finder = new Finder()
-
-    constructor() {
-        super()
-
-        this.bindEvents()
-    }
+    protected player: HTMLMediaElement
+    protected shouldBePlaying: boolean = false
+    protected finder = new Finder()
 
     get isLivestream(): boolean {
         return isLivestream()
@@ -81,7 +75,7 @@ export class Player extends EventEmitter implements PlayerState {
         return this.finder.find()
             .then((player) => {
                 this.player = player
-                this.bindEvents()
+                this.bindPlayerEvents()
 
                 if (!this.isLivestream) {
                     this.player.pause()
@@ -103,7 +97,7 @@ export class Player extends EventEmitter implements PlayerState {
         this.finder.destroy()
     }
 
-    private bindEvents() {
+    protected bindPlayerEvents() {
         this.player.addEventListener('play', () => {
             if (!this.shouldBePlaying && !isLivestream()) {
                 this.player.pause()
