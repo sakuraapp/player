@@ -1,5 +1,6 @@
 import { Netflix } from './helpers/netflix.helper'
 import { JWPlayer } from './helpers/jwplayer.helper'
+import { YouTube } from './helpers/youtube.helper'
 import {
     getDomain,
     sleep,
@@ -8,7 +9,8 @@ import {
     onMediaReady,
     findElementByClass
 } from './utils'
-import taskManager from './utils/taskManager'
+import taskManager from './managers/task.manager'
+import proxyManager from './managers/proxy.manager'
 
 export class Finder {
     private isVideoKnown(video: HTMLVideoElement): boolean {
@@ -54,6 +56,17 @@ export class Finder {
 
     public find(): Promise<HTMLMediaElement> {
         return new Promise(async (resolve, reject) => {
+            const domain = getDomain()
+
+            switch (domain) {
+                case 'youtube.com':
+                    await YouTube.init()
+                    break
+                case 'netflix.com':
+                    Netflix.init()
+                    break
+            }
+            
             let videos = Array.from(document.getElementsByTagName('video'))
             let el
     
@@ -65,38 +78,6 @@ export class Finder {
     
                     break
                 }
-            }
-    
-            const domain = getDomain()
-    
-            switch (domain) {
-                case 'youtube.com':
-                    await sleep(500)
-    
-                    const theaterMode = document.getElementsByClassName('ytp-size-button')[0] as HTMLButtonElement
-    
-                    if (theaterMode) {
-                        theaterMode.click()
-                    }
-    
-                    const autoplay = document.getElementById('toggle') as HTMLInputElement
-    
-                    if (autoplay && autoplay.checked) {
-                        autoplay.click()
-                    }
-    
-                    const overlay = document.getElementsByClassName('ytp-cued-thumbnail-overlay')[0] as HTMLElement
-                    const playBtn = document.getElementsByClassName('ytp-large-play-button')[0] as HTMLButtonElement
-    
-                    if (playBtn) {
-                        if (overlay.style.display !== 'none' && overlay.style.visibility !== 'hidden') {
-                            playBtn.click()
-                        }
-                    }
-                    break
-                case 'netflix.com':
-                    Netflix.init()
-                    break
             }
     
             if (!el) {
@@ -135,7 +116,7 @@ export class Finder {
                 overlayEl.click()
             }
             
-            if (el.classList.contains('jw-video')) {
+            if (JWPlayer.isPlayer(el)) {
                 await JWPlayer.init()
             }
     
@@ -147,6 +128,7 @@ export class Finder {
                 el.pause()
             }
             
+            // not in the switch above because the video player doesn't appear right away, so we just wait until the video is found anyway
             if (domain === 'twitch.tv') {
                 const btn = findElementByClass('tw-core-button--overlay', (btn: HTMLButtonElement) => {
                     return btn.dataset['aTarget'] === 'player-theatre-mode-button'
@@ -163,5 +145,6 @@ export class Finder {
 
     public destroy(): void {
         taskManager.destroy()
+        proxyManager.destroy()
     }
 }

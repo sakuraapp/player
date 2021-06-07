@@ -38,7 +38,7 @@ export function isLivestream(): boolean {
     const domain = getDomain()
 
     if (domain.includes('twitch.tv')) {
-        return true
+        return !location.pathname.startsWith('/videos')
     } else if (domain === 'youtube.com') {
         return document.getElementsByClassName('ytp-live').length > 0
     }
@@ -46,70 +46,18 @@ export function isLivestream(): boolean {
     return false
 }
 
-export function createInitiator(name: string, fn: unknown): Promise<void> {
-    return new Promise((resolve) => {
-        const initScript = `() => {
-            const init = ${fn}
-            const attempt = () => {
-                return init(() => {
-                    window.postMessage({ action: 'sakura-${name}' }, location.origin)
-                })
-            }
-            
-            if (!attempt()) {
-                let interval = window.setInterval(() => {
-                    if (attempt()) clearInterval(interval)
-                }, 35)
-            }
-        }`
-
-        const script = document.createElement('script')
-
-        script.text = `(${initScript})();`
-        script.defer = true
-
-        const onMessage = (event: MessageEvent) => {
-            if (event.source != window) return
-            if (event.data.action === `sakura-${name}`) {
-                window.removeEventListener('message', onMessage)
-                resolve()
-            }
-        }
-        
-        window.addEventListener('message', onMessage)
-        document.body.appendChild(script)
-    })
-}
-
-export function createProxyFn(name: string, fn: unknown): void {
-    name = name.replace("'", "\\'")
-    const content = `(() => {
-        const fn = ${fn}
-
-        window.addEventListener('message', (e) => {
-            if (event.source != window) return
-            if (event.data.action === 'sakura-call-proxy') {
-                if (event.data.name === '${name}') {
-                    fn(...event.data.args)
-                }
-            }
-        })
-    })()`
-
+export function runScript(fn: unknown, ...args: unknown[]): void {
     const script = document.createElement('script')
+    const argList = args.map((arg) => `${arg}`)
 
-    script.text = content
+    script.text = `(${fn})(${argList.join(', ')});`
     script.defer = true
 
     document.body.appendChild(script)
 }
 
-export function callProxyFn(name: string, ...args: unknown[]): void {
-    window.postMessage({
-        action: 'sakura-call-proxy',
-        name,
-        args
-    }, location.origin)
+export function rand(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1) + min)
 }
 
 export function findElementByClass(cls: string, fn: (el: HTMLElement) => boolean) {

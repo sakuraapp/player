@@ -1,13 +1,22 @@
 import { EventEmitter } from 'events'
 import { Finder } from './finder'
+import { JWPlayer } from './helpers/jwplayer.helper'
 import { Netflix } from './helpers/netflix.helper'
 import {
     getDomain,
     isLivestream
 } from './utils'
 
+export type CaptionTrackId = string | number
+
+export enum PlayerType {
+    Default,
+    JWPlayer,
+    Netflix,
+}
+
 export interface CaptionTrack {
-    readonly id: string
+    readonly id: CaptionTrackId
     readonly label: string
     readonly active: boolean
 }
@@ -16,10 +25,12 @@ export interface PlayerState {
     currentTime: number
     duration: number
     playing: boolean
+    volume: number
 }
 
 export class Player extends EventEmitter implements PlayerState {
     protected player: HTMLMediaElement
+    protected type: PlayerType = PlayerType.Default
     protected shouldBePlaying: boolean = false
     protected finder = new Finder()
 
@@ -34,7 +45,8 @@ export class Player extends EventEmitter implements PlayerState {
     set currentTime(val: number) {
         const domain = getDomain()
 
-        if (domain ===  'netflix.com') {
+        // netflix's player doesn't support setting currentTime
+        if (this.type === PlayerType.Netflix) {
             Netflix.seek(val * 1000)
         } else if (!isLivestream()) {
             this.player.currentTime = val
@@ -80,13 +92,18 @@ export class Player extends EventEmitter implements PlayerState {
                 if (!this.isLivestream) {
                     this.player.pause()
                 }
+
+                if (getDomain() === 'netflix.com') {
+                    this.type = PlayerType.Netflix
+                } else if (JWPlayer.isPlayer(player)) {
+                    this.type = PlayerType.JWPlayer
+                }
         
                 this.currentTime = 0
                 this.emit('ready', {
                     volume: this.volume,
                     duration: this.duration,
                     isLivestream: this.isLivestream,
-                    captions: this.getCaptions(),
                 })
 
                 return player
@@ -127,18 +144,25 @@ export class Player extends EventEmitter implements PlayerState {
         this.currentTime = time
     }
 
-    public getCaptions(): Array<CaptionTrack> {
+    public async getCaptions(): Promise<CaptionTrack[]> {
         const { player } = this
-        const captions = []
+        
+        let captions: CaptionTrack[]
     
-        for (let i = 0; i < player.textTracks.length; i++) {
-            const track = player.textTracks[i]
-    
-            captions.push({
-                id: track.id,
-                label: track.label,
-                active: track.mode === 'showing',
-            })
+        if (this.type === PlayerType.JWPlayer) {
+            captions = await JWPlayer.getCaptions()
+        } else {
+            captions = []
+
+            for (let i = 0; i < player.textTracks.length; i++) {
+                const track = player.textTracks[i]
+        
+                captions.push({
+                    id: track.id,
+                    label: track.label,
+                    active: track.mode === 'showing',
+                })
+            }
         }
     
         return captions

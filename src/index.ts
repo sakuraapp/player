@@ -1,8 +1,9 @@
-import { Player, CaptionTrack, PlayerState } from './player'
+import { Player, PlayerType, CaptionTrack, PlayerState } from './player'
 import { getDomain, isLivestream } from './utils'
 
 export {
     Player,
+    PlayerType,
     CaptionTrack,
     PlayerState,
     getDomain,
