@@ -48,7 +48,13 @@ export function isLivestream(): boolean {
 
 export function runScript(fn: unknown, ...args: unknown[]): void {
     const script = document.createElement('script')
-    const argList = args.map((arg) => `${arg}`)
+    const argList = args.map((arg) => {
+        if (typeof arg === 'string') {
+            return `'${arg.replace("'", "\\'")}'`
+        } else {
+            return `${arg}`
+        }
+    })
 
     script.text = `(${fn})(${argList.join(', ')});`
     script.defer = true

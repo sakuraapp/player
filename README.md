@@ -32,11 +32,25 @@ player.find().then(() => {
 
     player.volume = 0.5 // value between 0 and 1
 
-    console.log(player.getCaptions())
+    console.log(player.textTracks)
+    console.log(player.audioTracks) // this is unsupported on the default HTML5 player
+
+    console.log(player.textTrack) // current text track
+    console.log(player.audioTrack) // current audio track
+
+    player.setTextTrack(player.textTracks[0].id)
+    player.setAudioTrack(player.audioTracks[0].id)
+
+    player.textTrack = player.textTracks[0] // alternative to player.setTextTrack()
+    player.audioTrack = player.audioTracks[0] // alternative to player.setAudioTrack()
 })
-```
-To stop searching if a video was not found:
-```js
+
+player.on('ready', () => console.log('ready'))
+
+// To stop searching if a video was not found:
+player.stop()
+
+// Please call this method if the player is no longer needed to prevent memory leaks
 player.destroy()
 ```
 ## TODO

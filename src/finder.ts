@@ -143,8 +143,12 @@ export class Finder {
         })
     }
 
-    public destroy(): void {
+    public stop(): void {
         taskManager.destroy()
+    }
+
+    public destroy(): void {
+        this.stop()
         proxyManager.destroy()
     }
 }

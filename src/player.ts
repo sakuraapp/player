@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 import { Finder } from './finder'
+import { HTML5 } from './helpers/html5.helper'
 import { JWPlayer } from './helpers/jwplayer.helper'
 import { Netflix } from './helpers/netflix.helper'
 import {
@@ -7,32 +8,55 @@ import {
     isLivestream
 } from './utils'
 
-export type CaptionTrackId = string | number
+export type TrackId = string | number
+
+export type NetworkState = number
+export type ReadyState = number
+
+type EventHandlerFn<T extends Event> = (e: T) => void
+
+interface EventHandler<T extends Event = Event> {
+    event: string
+    handler: EventHandlerFn<T>
+}
 
 export enum PlayerType {
-    Default,
+    HTML5,
     JWPlayer,
     Netflix,
 }
 
-export interface CaptionTrack {
-    readonly id: CaptionTrackId
+export interface Track {
+    readonly id: TrackId
     readonly label: string
-    readonly active: boolean
+    active: boolean
 }
 
 export interface PlayerState {
     currentTime: number
-    duration: number
+    readonly duration: number
     playing: boolean
     volume: number
+    playbackRate: number
+    audioTrack?: Track
+    textTrack?: Track
+    readonly textTracks: Track[]
+    readonly audioTracks: Track[]
+    readonly waiting: boolean
+    readonly networkState: NetworkState
+    readonly readyState: ReadyState
 }
 
 export class Player extends EventEmitter implements PlayerState {
     protected player: HTMLMediaElement
-    protected type: PlayerType = PlayerType.Default
+    protected type: PlayerType = PlayerType.HTML5
     protected shouldBePlaying: boolean = false
     protected finder = new Finder()
+
+    private _textTracks: Track[] = []
+    private _audioTracks: Track[] = []
+    private _waiting: boolean = false
+    private _eventHandlers: EventHandler[] = []
 
     get isLivestream(): boolean {
         return isLivestream()
@@ -43,14 +67,7 @@ export class Player extends EventEmitter implements PlayerState {
     }
 
     set currentTime(val: number) {
-        const domain = getDomain()
-
-        // netflix's player doesn't support setting currentTime
-        if (this.type === PlayerType.Netflix) {
-            Netflix.seek(val * 1000)
-        } else if (!isLivestream()) {
-            this.player.currentTime = val
-        }
+        this.seek(val)
     }
 
     get playing(): boolean {
@@ -58,16 +75,10 @@ export class Player extends EventEmitter implements PlayerState {
     }
 
     set playing(val: boolean) {
-        if (this.isLivestream) {
-            return
-        }
-
-        this.shouldBePlaying = val
-
         if (val) {
-            this.player.play()
+            this.play()
         } else {
-            this.player.pause()
+            this.pause()
         }
     }
 
@@ -83,9 +94,53 @@ export class Player extends EventEmitter implements PlayerState {
         return this.player.duration
     }
 
+    get playbackRate(): number {
+        return this.player.playbackRate
+    }
+
+    set playbackRate(val: number) {
+        this.player.playbackRate = val
+    }
+
+    get textTracks(): Track[] {
+        return this._textTracks
+    }
+
+    get audioTracks(): Track[] {
+        return this._audioTracks
+    }
+
+    get textTrack(): Track {
+        return this.textTracks.find((track) => track.active)
+    }
+
+    set textTrack(track: Track) {
+        this.setTextTrack(track.id)
+    }
+
+    get audioTrack(): Track {
+        return this.audioTracks.find((track) => track.active)
+    }
+
+    set audioTrack(track: Track) {
+        this.setAudioTrack(track.id)
+    }
+
+    get waiting(): boolean {
+        return this._waiting
+    }
+
+    get networkState(): NetworkState {
+        return this.player.networkState
+    }
+
+    get readyState(): ReadyState {
+        return this.player.readyState
+    }
+
     public find(): Promise<HTMLMediaElement> {
         return this.finder.find()
-            .then((player) => {
+            .then(async (player) => {
                 this.player = player
                 this.bindPlayerEvents()
 
@@ -98,73 +153,222 @@ export class Player extends EventEmitter implements PlayerState {
                 } else if (JWPlayer.isPlayer(player)) {
                     this.type = PlayerType.JWPlayer
                 }
+
+                this._textTracks = await this.getTextTracks()
+                this._audioTracks = await this.getAudioTracks()
         
                 this.currentTime = 0
-                this.emit('ready', {
-                    volume: this.volume,
-                    duration: this.duration,
-                    isLivestream: this.isLivestream,
-                })
+                this.emit('ready')
 
                 return player
             })
     }
 
+    public stop(): void {
+        this.finder.stop()
+    }
+
     public destroy(): void {
         this.finder.destroy()
+        this.unbindEventHandlers()
+    }
+
+    protected bindEvent(
+        evtName: keyof HTMLMediaElementEventMap,
+        newName?: string
+    ) {
+        if (!newName) {
+            newName = evtName
+        }
+
+        this.bindEventHandler(evtName, (e) => {
+            this.emit(newName, e)
+        })
+    }
+
+    protected bindEventHandler<T extends Event>(
+        evtName: keyof HTMLMediaElementEventMap,
+        handler: EventHandlerFn<T>
+    ): EventHandler<T> {
+        const evtHandler = {
+            event: evtName,
+            handler,
+        }
+
+        this._eventHandlers.push(evtHandler)
+        this.player.addEventListener(evtName, handler)
+
+        return evtHandler
+    }
+
+    protected unbindEventHandler<T extends Event>(evtHandler: EventHandler<T>, remove = true) {
+        this.player.removeEventListener(
+            evtHandler.event,
+            evtHandler.handler
+        )
+
+        if (remove) {
+            const i = this._eventHandlers.indexOf(evtHandler)
+
+            if (i > -1) {
+                this._eventHandlers.splice(i, 1)
+            }
+        }
+    }
+
+    protected unbindEventHandlers() {
+        for (const evtHandler of this._eventHandlers) {
+            this.unbindEventHandler(evtHandler, false)
+        }
+
+        this._eventHandlers = []
     }
 
     protected bindPlayerEvents() {
-        this.player.addEventListener('play', () => {
+        this.bindEventHandler('play', (e) => {
+            this._waiting = false
+
             if (!this.shouldBePlaying && !isLivestream()) {
                 this.player.pause()
             } else {
-                this.emit('play')
+                this.emit('play', e)
             }
         })
 
-        this.player.addEventListener('pause', () => {
-            this.emit('pause')
-        })
+        this.bindEvent('pause')
+        this.bindEvent('ended', 'end')
+        this.bindEvent('seeking')
+        this.bindEvent('seeked', 'seek')
+        this.bindEvent('ratechange')
+        this.bindEvent('volumechange')
+        this.bindEvent('canplay')
+        this.bindEvent('canplaythrough')
+        this.bindEvent('loadeddata')
+        this.bindEvent('loadedmetadata')
+        this.bindEvent('loadstart')
+        this.bindEvent('load')
 
-        this.player.addEventListener('ended', () => {
-            this.emit('end')
+        // todo: compatibility with older browsers?
+        this.bindEventHandler('waiting', (e) => {
+            this._waiting = true
+            this.emit('waiting', e)
         })
     }
 
     play(): void {
-        this.playing = true
+        this.shouldBePlaying = true
+        this.player.play()
     }
 
     pause(): void {
-        this.playing = false
+        if (this.isLivestream) {
+            return
+        }
+
+        this.shouldBePlaying = false
+        this.player.pause()
     }
     
     seek(time: number): void {
-        this.currentTime = time
+        // netflix's player doesn't support setting currentTime
+        if (this.type === PlayerType.Netflix) {
+            Netflix.seek(time * 1000)
+        } else if (!isLivestream()) {
+            this.player.currentTime = time
+        }
     }
 
-    public async getCaptions(): Promise<CaptionTrack[]> {
-        const { player } = this
-        
-        let captions: CaptionTrack[]
-    
-        if (this.type === PlayerType.JWPlayer) {
-            captions = await JWPlayer.getCaptions()
-        } else {
-            captions = []
+    protected getTrackById(trackId: TrackId, tracks: Track[]): Track {
+        return tracks.find((track) => track.id === trackId)
+    }
 
-            for (let i = 0; i < player.textTracks.length; i++) {
-                const track = player.textTracks[i]
-        
-                captions.push({
-                    id: track.id,
-                    label: track.label,
-                    active: track.mode === 'showing',
-                })
+    public getTextTrackById(trackId: TrackId): Track {
+        return this.getTrackById(trackId, this.textTracks)
+    }
+
+    public getAudioTrackById(trackId: TrackId): Track {
+        return this.getTrackById(trackId, this.audioTracks)
+    }
+
+    public async getTextTracks(): Promise<Track[]> {
+        switch (this.type) {
+            case PlayerType.JWPlayer:
+                return await JWPlayer.getTextTracks()
+                break
+            case PlayerType.Netflix:
+                return await Netflix.getTextTracks()
+                break
+            default:
+                return HTML5.getTextTracks(this.player)
+        }
+    }
+
+    public async setTextTrack(trackId: TrackId): Promise<void> {
+        switch (this.type) {
+            case PlayerType.JWPlayer:
+                await JWPlayer.setTextTrack(trackId)
+                break
+            case PlayerType.Netflix:
+                await Netflix.setTextTrack(trackId)
+                break
+            default:
+                HTML5.setTextTrack(trackId, this.player)
+        }
+
+        let track: Track
+
+        for (const i in this._textTracks) {
+            const locTrack = this._textTracks[i]
+
+            if (locTrack.id === trackId) {
+                this._textTracks[i].active = true
+                
+                track = locTrack
+            } else {
+                this._textTracks[i].active = false
             }
         }
-    
-        return captions
+
+        this.emit('texttrackchange', track)
+    }
+
+    public async getAudioTracks(): Promise<Track[]> {
+        switch (this.type) {
+            case PlayerType.JWPlayer:
+                return await JWPlayer.getAudioTracks()
+                break
+            case PlayerType.Netflix:
+                return await Netflix.getAudioTracks()
+                break
+            default:
+                return []
+        }
+    }
+
+    public async setAudioTrack(trackId: TrackId): Promise<void> {
+        switch (this.type) {
+            case PlayerType.JWPlayer:
+                await JWPlayer.setAudioTrack(trackId)
+                break
+            case PlayerType.Netflix:
+                await Netflix.setAudioTrack(trackId)
+                break
+        }
+
+        let track: Track
+
+        for (const i in this._audioTracks) {
+            const locTrack = this._audioTracks[i]
+
+            if (locTrack.id === trackId) {
+                this._audioTracks[i].active = true
+                
+                track = locTrack
+            } else {
+                this._audioTracks[i].active = false
+            }
+        }
+
+        this.emit('audiotrackchange', track)
     }
 }

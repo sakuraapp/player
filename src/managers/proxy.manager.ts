@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events'
 import { rand, runScript } from '../utils'
 
 const INITIATOR_TICKRATE = 35
@@ -5,14 +6,21 @@ const INITIATOR_TICKRATE = 35
 export type CallbackFn = Function
 
 export interface Callback {
+    temporary: boolean
     resolve: CallbackFn
     reject: CallbackFn
+}
+
+export interface IEmitter {
+    addEventListener(evt: string, handler: Function): void
+    removeEventListener(evt: string, handler: Function): void
 }
 
 // since extensions are sandboxed by default, we inject a "proxy function" into the page to escape the sandbox and use the window.postMessage API to call it
 export class ProxyManager {
     private calls = 0
-    private callbacks: Map<number, Callback>
+    private callbacks: Map<number, Callback> = new Map()
+    private emitter = new EventEmitter()
 
     private initiated = false
     private containerKey: string
@@ -27,12 +35,13 @@ export class ProxyManager {
         runScript(`(key) => {
             window[key] = {
                 functions: new Map(),
+                events: [],
                 respond: (data, status, callId) => {
-                    if (callId) {
+                    if (callId !== null && callId !== undefined) {
                         window.postMessage({
                             action: 'sakura-proxy-result',
                             data,
-                            status.
+                            status,
                             callId,
                         })
                     }
@@ -47,15 +56,44 @@ export class ProxyManager {
                             try {
                                 const res = await fn(...args)
     
-                                respond(res, true, callId)
+                                window[key].respond(res, true, callId)
                             } catch (err) {
-                                respond(err, false, callId)
+                                window[key].respond(err, false, callId)
                             }
                         }
                     }
                 },
                 bind: () => window.addEventListener('message', window[key].onMessage),
-                unbind: () => window.removeEventListener('message', window[key].onMessage)
+                unbind: () => {
+                    window.removeEventListener('message', window[key].onMessage)
+
+                    for (const event of window[key].events) {
+                        event.emitter.removeEventListener(event.event, event.handler)
+                    }
+                },
+                dispatch: (emitterName, eventName, data) => {
+                    window.postMessage({
+                        action: 'sakura-proxy-event',
+                        emitter: emitterName,
+                        event: eventName,
+                        data,
+                    })
+                },
+                addEmitter: (name, emitter, events) => {
+                    for (let event of events) {
+                        let handler = (data) => {
+                            window[key].dispatch(name, event, data)
+                        }
+
+                        window[key].events.push({
+                            emitter,
+                            event,
+                            handler,
+                        })
+
+                        emitter.addEventListener(event, handler)
+                    }
+                },
             }
 
             window[key].bind()
@@ -89,7 +127,13 @@ export class ProxyManager {
                 callback.reject(res)
             }
 
-            this.removeCallback(callId)
+            if (callback.temporary) {
+                this.removeCallback(callId)
+            }
+        } else if (event.data.action === 'sakura-proxy-event') {
+            const { emitter, event: name, data } = event.data
+
+            this.emitter.emit(`${emitter}/${name}`, data)
         }
     }
 
@@ -116,24 +160,24 @@ export class ProxyManager {
     createInitiator(
         name: string,
         fn: () => boolean | Promise<boolean>,
-        tickRate = INITIATOR_TICKRATE
+        tickRate = INITIATOR_TICKRATE,
+        ...args: unknown[]
     ): Promise<void> {
         const fnName = `init-${name}`
         
-        this.create(fnName, `() => {
+        this.create(fnName, `(...args) => {
             return new Promise(async (resolve) => {
                 const init = ${fn}
                 const attempt = async () => {
-                        let res
+                    let res
 
-                        try {
-                            res = await init()
-                        } catch (err) {
-                            res = false
-                        }
+                    try {
+                        res = await init(...args)
+                    } catch (err) {
+                        res = false
+                    }
 
-                        return res
-                    })
+                    return res
                 }
 
                 const sleep = (ms) => {
@@ -155,12 +199,37 @@ export class ProxyManager {
             })
         }`)
 
-        return this.call(fnName)
+        return this.call(fnName, ...args)
     }
 
-    call<T = unknown>(name: string, ...args: unknown[]): Promise<T> {
+    createEmitter(name: string, fn: () => IEmitter, events: string[]): Promise<void> {
+        const fnName = `emitter-${name}`
+
+        this.create(fnName, `(name, events) => {
+            const getEmitter = ${fn}
+            const emitter = getEmitter()
+
+            window[key].addEmitter(name, emitter, events)
+        }`)
+
+        return this.call(fnName, name, events)
+    }
+
+    private dispatchCall<T>({
+        name,
+        args,
+        temporary
+    }: {
+        name: string
+        args: unknown[]
+        temporary: boolean
+    }): Promise<T> {
         return new Promise((resolve, reject) => {
-            const callId = this.addCallback({ resolve, reject })
+            const callId = this.addCallback({
+                temporary,
+                resolve,
+                reject,
+            })
 
             window.postMessage({
                 action: 'sakura-call-proxy',
@@ -168,6 +237,14 @@ export class ProxyManager {
                 args,
                 callId,
             }, location.origin)
+        })
+    }
+
+    call<T = unknown>(name: string, ...args: unknown[]): Promise<T> {
+        return this.dispatchCall<T>({
+            name,
+            args,
+            temporary: true,
         })
     }
 
@@ -185,6 +262,7 @@ export class ProxyManager {
         if (this.initiated) {
             runScript(`(key) => {
                 window[key].unbind()
+                window[key] = null
             }`, this.containerKey)
         }
     }
