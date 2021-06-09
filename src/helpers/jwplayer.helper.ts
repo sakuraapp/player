@@ -2,7 +2,7 @@ import { Track, TrackId } from '../player'
 import proxyManager from '../managers/proxy.manager'
 
 export class JWPlayer {
-    static async init(): Promise<void> {
+    static async setup(): Promise<void> {
         await proxyManager.createInitiator('jwplayer', () => {
             if (typeof jwplayer === 'function') {
                 jwplayer().play()

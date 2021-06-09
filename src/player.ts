@@ -3,9 +3,12 @@ import { Finder } from './finder'
 import { HTML5 } from './helpers/html5.helper'
 import { JWPlayer } from './helpers/jwplayer.helper'
 import { Netflix } from './helpers/netflix.helper'
+import { Plyr } from './helpers/plyr.helper'
+import { Twitch } from './helpers/twitch.helper'
+import { YouTube } from './helpers/youtube.helper'
 import {
-    getDomain,
-    isLivestream
+    isLivestream,
+    onMediaReady
 } from './utils'
 
 export type TrackId = string | number
@@ -47,12 +50,15 @@ export interface PlayerState {
     readonly readyState: ReadyState
 }
 
+export interface PlayerOptions {}
+
 export class Player extends EventEmitter implements PlayerState {
     protected player: HTMLMediaElement
     protected type: PlayerType = PlayerType.HTML5
     protected shouldBePlaying: boolean = false
     protected finder = new Finder()
 
+    private _initialized = false
     private _textTracks: Track[] = []
     private _audioTracks: Track[] = []
     private _waiting: boolean = false
@@ -138,30 +144,63 @@ export class Player extends EventEmitter implements PlayerState {
         return this.player.readyState
     }
 
-    public find(): Promise<HTMLMediaElement> {
-        return this.finder.find()
-            .then(async (player) => {
-                this.player = player
-                this.bindPlayerEvents()
+    public async find(): Promise<HTMLMediaElement> {
+        const player = await this.finder.find()
 
-                if (!this.isLivestream) {
-                    this.player.pause()
-                }
+        await this.setup(player)
 
-                if (getDomain() === 'netflix.com') {
-                    this.type = PlayerType.Netflix
-                } else if (JWPlayer.isPlayer(player)) {
-                    this.type = PlayerType.JWPlayer
-                }
+        return player
+    }
 
-                this._textTracks = await this.getTextTracks()
-                this._audioTracks = await this.getAudioTracks()
-        
-                this.currentTime = 0
-                this.emit('ready')
+    // used for the purpose of starting up the player (i.e. clicking play btn)
+    public async init(): Promise<void> {
+        if (YouTube.isPlayer()) {
+            await YouTube.init()
+        }
 
-                return player
-            })
+        this._initialized = true
+    }
+
+    public async setup(el: HTMLMediaElement): Promise<void> {
+        if (!this._initialized) {
+            await this.init()
+        }
+
+        this.player = el
+
+        if (!isLivestream()) {
+            el.pause()
+        }
+
+        if (Plyr.isPlayer(el)) {
+            Plyr.setup()
+        } else if (JWPlayer.isPlayer(el)) {
+            await JWPlayer.setup()
+
+            this.type = PlayerType.JWPlayer
+        } else if (Netflix.isPlayer()) {
+            Netflix.setup()
+            
+            this.type = PlayerType.Netflix
+        } else if (Twitch.isPlayer()) {
+            Twitch.setup()
+        }
+
+        if (el.readyState !== 4) {
+            await onMediaReady(el)
+        }
+
+        if (!isLivestream()) {
+            el.pause()
+        }
+
+        this.bindPlayerEvents()
+
+        this._textTracks = await this.getTextTracks()
+        this._audioTracks = await this.getAudioTracks()
+
+        this.currentTime = 0
+        this.emit('ready')
     }
 
     public stop(): void {

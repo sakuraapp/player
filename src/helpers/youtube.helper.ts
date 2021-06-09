@@ -1,10 +1,14 @@
-import { sleep } from '../utils'
+import { getDomain, sleep } from '../utils'
 
 interface YouTubeElement extends Element {
     theater?: boolean
 }
 
 export class YouTube {
+    static isPlayer(): boolean {
+        return getDomain() === 'youtube.com'
+    }
+    
     static async init(): Promise<void> {
         await sleep(500)
     

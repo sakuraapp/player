@@ -1,5 +1,6 @@
 import { Track, TrackId } from '../player'
 import proxyManager from '../managers/proxy.manager'
+import { getDomain } from '../utils'
 
 type TrackFormatter = (track: netflix.Track, active: boolean) => Track
 
@@ -15,7 +16,11 @@ export class Netflix {
         }
     }
 
-    static init() {
+    static isPlayer(): boolean {
+        return getDomain() === 'netflix.com'
+    }
+
+    static setup() {
         proxyManager.create('netflix.seek', (time: number) => {
             const videoPlayer = netflix.appContext.state.playerApp.getAPI().videoPlayer
             const player = videoPlayer.getVideoPlayerBySessionId(videoPlayer.getAllPlayerSessionIds()[0])
