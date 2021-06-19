@@ -1,9 +1,13 @@
-import { Player, PlayerType, Track, TrackId, PlayerState } from './player'
+import { SakuraPlayer } from './players/sakura.player'
+import { BasePlayer } from './players/base.player'
+import { ProxyPlayer } from './players/proxy.player'
+import { Track, TrackId, PlayerState } from './types'
 import { getDomain, isLivestream } from './utils'
 
 export {
-    Player,
-    PlayerType,
+    SakuraPlayer,
+    BasePlayer,
+    ProxyPlayer,
     Track,
     TrackId,
     PlayerState,
@@ -11,4 +15,4 @@ export {
     isLivestream
 }
 
-export default Player
+export default SakuraPlayer

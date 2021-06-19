@@ -1,15 +1,14 @@
-import { getDomain, sleep } from '../utils'
+import { sleep } from '../utils'
+import { HTML5 } from './html5.helper'
 
 interface YouTubeElement extends Element {
     theater?: boolean
 }
 
-export class YouTube {
-    static isPlayer(): boolean {
-        return getDomain() === 'youtube.com'
-    }
-    
-    static async init(): Promise<void> {
+export class YouTube extends HTML5 {
+    domain = 'youtube.com'
+
+    async init(): Promise<void> {
         await sleep(500)
     
         const ytdWatch: YouTubeElement = document.getElementsByTagName('ytd-watch-flexy')[0]

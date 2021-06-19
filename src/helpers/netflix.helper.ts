@@ -1,14 +1,16 @@
-import { Track, TrackId } from '../player'
+import { Track, TrackId } from '../types'
 import proxyManager from '../managers/proxy.manager'
-import { getDomain } from '../utils'
+import { HTML5 } from './html5.helper'
 
 type TrackFormatter = (track: netflix.Track, active: boolean) => Track
 
 // todo: reduce code repetition
 // maybe make the proxy manager use classes instead so we have access to all methods
 
-export class Netflix {
-    static formatTrack(track: netflix.Track, active: boolean): Track {
+export class Netflix extends HTML5 {
+    domain = 'netflix.com'
+
+    formatTrack(track: netflix.Track, active: boolean): Track {
         return {
             id: track.trackId,
             label: track.displayName,
@@ -16,11 +18,7 @@ export class Netflix {
         }
     }
 
-    static isPlayer(): boolean {
-        return getDomain() === 'netflix.com'
-    }
-
-    static setup() {
+    setup() {
         proxyManager.create('netflix.seek', (time: number) => {
             const videoPlayer = netflix.appContext.state.playerApp.getAPI().videoPlayer
             const player = videoPlayer.getVideoPlayerBySessionId(videoPlayer.getAllPlayerSessionIds()[0])
@@ -93,31 +91,31 @@ export class Netflix {
         })
     }
 
-    static seek(time: number): void {
+    seek(time: number): void {
         return proxyManager.callWithoutResult('netflix.seek', time)
     }
 
-    static getTextTrack(): Promise<Track> {
+    getTextTrack(): Promise<Track> {
         return proxyManager.call('netflix.getTextTrack', this.formatTrack)
     }
 
-    static getTextTracks(): Promise<Track[]> {
+    getTextTracks(): Promise<Track[]> {
         return proxyManager.call('netflix.getTextTracks', this.formatTrack)
     }
 
-    static setTextTrack(trackId: TrackId): Promise<void> {
+    setTextTrack(trackId: TrackId): Promise<void> {
         return proxyManager.call('netflix.setTextTrack', trackId)
     }
 
-    static getAudioTrack(): Promise<Track> {
+    getAudioTrack(): Promise<Track> {
         return proxyManager.call('netflix.getAudioTrack', this.formatTrack)
     }
 
-    static getAudioTracks(): Promise<Track[]> {
+    getAudioTracks(): Promise<Track[]> {
         return proxyManager.call('netflix.getAudioTracks', this.formatTrack)
     }
 
-    static setAudioTrack(trackId: TrackId): Promise<void> {
+    setAudioTrack(trackId: TrackId): Promise<void> {
         return proxyManager.call('netflix.setAudioTrack', trackId)
     }
 }

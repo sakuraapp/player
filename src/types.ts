@@ -3,12 +3,7 @@ export type TrackId = string | number
 export type NetworkState = number
 export type ReadyState = number
 
-export type EventHandlerFn<T extends Event> = (e: T) => void
-
-export interface EventHandler<T extends Event = Event> {
-    event: string
-    handler: EventHandlerFn<T>
-}
+export type MediaEventName = keyof HTMLMediaElementEventMap
 
 export enum PlayerType {
     HTML5,
@@ -35,6 +30,7 @@ export interface PlayerState {
     readonly waiting: boolean
     readonly networkState: NetworkState
     readonly readyState: ReadyState
+    readonly isLivestream: boolean
 }
 
 export interface Player extends PlayerState {
@@ -43,13 +39,13 @@ export interface Player extends PlayerState {
     seek(time: number): void
     getTextTracks(): Promise<Track[]> | Track[]
     getAudioTracks(): Promise<Track[]> | Track[]
-    isLivestream(): boolean
+    setTextTrack(id: TrackId): Promise<void> | void
+    setAudioTrack(id: TrackId): Promise<void> | void
 }
 
 export interface Helper extends Player {
+    readonly domain?: string
     init?(): Promise<void>
-    setup(el: HTMLMediaElement): Promise<void>
+    setup?(el: HTMLMediaElement): Promise<void> | void
     isPlayer(el: HTMLMediaElement): boolean
 }
-
-export interface PlayerOptions {}

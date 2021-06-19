@@ -1,8 +1,9 @@
-import { Track, TrackId } from '../player'
+import { Track, TrackId } from '../types'
 import proxyManager from '../managers/proxy.manager'
+import { HTML5 } from './html5.helper'
 
-export class JWPlayer {
-    static async setup(): Promise<void> {
+export class JWPlayer extends HTML5 {
+    async setup(): Promise<void> {
         await proxyManager.createInitiator('jwplayer', () => {
             if (typeof jwplayer === 'function') {
                 jwplayer().play()
@@ -64,23 +65,23 @@ export class JWPlayer {
         })
     }
 
-    static isPlayer(el: HTMLElement): boolean {
+    isPlayer(el: HTMLElement): boolean {
         return el.classList.contains('jw-video')
     }
 
-    static getTextTracks(): Promise<Track[]> {
+    getTextTracks(): Promise<Track[]> {
         return proxyManager.call<Track[]>('jwplayer.getTextTracks')
     }
 
-    static setTextTrack(trackId: TrackId): Promise<void> {
+    setTextTrack(trackId: TrackId): Promise<void> {
         return proxyManager.call('jwplayer.setTextTrack', trackId)
     }
 
-    static getAudioTracks(): Promise<Track[]> {
+    getAudioTracks(): Promise<Track[]> {
         return proxyManager.call<Track[]>('jwplayer.getAudioTracks')
     }
 
-    static setAudioTrack(trackId: TrackId): Promise<void> {
+    setAudioTrack(trackId: TrackId): Promise<void> {
         return proxyManager.call('jwplayer.setAudioTrack', trackId)
     }
 }

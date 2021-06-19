@@ -1,4 +1,4 @@
-# @sakuraapp/player
+# Sakura Player
 
 This library is a player-agnostic abstraction that allows you to control media players on different websites.
 
@@ -16,8 +16,8 @@ npm install @sakuraapp/player
 
 ### Example
 ```js
-const { Player } = require('@sakuraapp/player')
-const player = new Player()
+const { SakuraPlayer } = require('@sakuraapp/player')
+const player = new SakuraPlayer()
 
 player.find().then(() => {
     player.play()

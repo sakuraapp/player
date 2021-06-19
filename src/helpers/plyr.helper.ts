@@ -1,9 +1,13 @@
-export class Plyr {
-    static isPlayer(el: HTMLMediaElement): boolean {
-        return el.parentElement.classList.contains('plyr__video-wrapper')
+import { HTML5 } from './html5.helper'
+
+export class Plyr extends HTML5 {
+    isPlayer(el: HTMLMediaElement): boolean {
+        if (el.parentElement) {
+            return el.parentElement.classList.contains('plyr__video-wrapper')
+        }
     }
 
-    static setup(): void {
+    setup() {
         const overlayEl = document.getElementsByClassName('plyr-overlay')[0] as HTMLButtonElement
             
         overlayEl.click()
