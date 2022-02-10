@@ -38,11 +38,16 @@ export class Finder {
 
     private findVideo(): Promise<HTMLVideoElement> {
         return taskManager.create<HTMLVideoElement>((stop, time) => {
-            const video = document.getElementsByTagName('video')[0]
-    
-            if (video) {
+            const videos = document.getElementsByTagName('video')
+            let video: HTMLVideoElement
+
+            for (let i = 0; i < videos.length; i++) {
+                video = videos[i]
+
+                // todo: not use getHTML
                 if (time >= 15000 || getHTML(video) !== '<video></video>') {
                     stop(video)
+                    break
                 }
             }
         })
